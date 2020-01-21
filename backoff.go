@@ -9,13 +9,17 @@ import (
 	"github.com/inconshreveable/log15"
 )
 
+var ErrShutdown = errors.New("TokenRefresher closing")
+
 type TokenRefresher interface {
 	GetToken() (string, error)
 	Refresh()
 	Close() error
 }
 
-var ErrShutdown = errors.New("TokenRefresher closing")
+type TokenRetriever interface {
+	RetrieveToken() (token string, expiresIn time.Duration, err error)
+}
 
 // tokenRefresher manages refreshing tokens with an exponential backoff
 // strategy until the token is expired, then switches to a constant
@@ -36,10 +40,10 @@ type tokenRefresher struct {
 }
 
 // NewTokenRefresher creates a new default tokenRefresher.
-func NewTokenRefresher(logger log15.Logger, refreshBuffer time.Duration) TokenRefresher {
+func NewTokenRefresher(logger log15.Logger, refreshBuffer time.Duration, retriever TokenRetriever) TokenRefresher {
 	m := tokenRefresher{
 		logger:        logger,
-		retriever:     &tokenRetriever{},
+		retriever:     retriever,
 		refreshBuffer: refreshBuffer,
 		done:          make(chan struct{}),
 		force:         make(chan struct{}),
@@ -215,15 +219,4 @@ Loop:
 // setToken sets the status of the cached token.
 func (m *tokenRefresher) setToken(token string) {
 	m.token = token
-}
-
-type TokenRetriever interface {
-	RetrieveToken() (token string, expiresIn time.Duration, err error)
-}
-
-// Mock TokenRetriever implementation.
-type tokenRetriever struct{}
-
-func (t *tokenRetriever) RetrieveToken() (token string, expiresIn time.Duration, err error) {
-	return "token", time.Hour, nil
 }
